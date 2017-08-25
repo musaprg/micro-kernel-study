@@ -59,6 +59,8 @@ struct msgbox {
 
 typedef enum {
   MSGBOX_ID_SAMPLE = 0,
+  MSGBOX_ID_GETMEMORY,
+  MSGBOX_ID_RETURNMEMORY,
   MSGBOX_ID_NUM
 } msgbox_id_t;
 
@@ -134,6 +136,11 @@ int task1_main(int argc, char *argv[])
 {
   int i;
   struct msgbuf msg;
+  struct memory_message {
+    struct msgbuf msg;
+    int id;
+    void *p;
+  } msg;
 
   for (i = 0; i < 20; i++) {
     fprintf(stderr, "task 1 %s %p\n", argv[0], current);
@@ -142,6 +149,11 @@ int task1_main(int argc, char *argv[])
       fprintf(stderr, "message send %p\n", &msg);
       syscall_send(MSGBOX_ID_SAMPLE, &msg);
     }
+
+    msg->id = MSGBOX_ID_RETURNMEMORY;
+    syscall_send(MSGBOX_ID_GETMEMORY, &msg);
+    mp = syscall_recv(MSGBOX_ID_RETURNMEMORY);
+    area = mp->p;
   }
 
   return 0;
@@ -176,10 +188,25 @@ int task3_main(int argc, char *argv[])
   return 0;
 }
 
+int memory_main(int argc, char *argv[])
+{
+  struct memory_msgbuf *mp;
+  static char buffer[1024][64];
+  int i = 0;
+
+  while (1) {
+    mp = syscall_recv(MSGBOX_ID_GETMEMORY);
+    area = buffer[i++]; /*メモリ獲得*/
+    mp->p = area;
+    syscall_send(mp->id, (struct msgbuf *)mp);
+  }
+}
+
 struct task_define tasks[] = {
   { "task1", task1_main, 4096 },
   { "task2", task2_main, 4096 },
   { "task3", task3_main, 4096 },
+  { "memory", memory_main, 4096 },
   { NULL, NULL, 0 }
 };
 
