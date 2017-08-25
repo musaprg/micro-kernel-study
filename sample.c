@@ -5,6 +5,8 @@
 #include <setjmp.h>
 #include <signal.h>
 
+#define DEBUG
+
 #ifdef __linux__
 #undef setjmp
 #endif
@@ -132,28 +134,32 @@ struct msgbuf *syscall_recv(msgbox_id_t id)
   return (struct msgbuf *)current->syscall.ret;
 }
 
+struct memory_message {
+  struct msgbuf msg;
+  int id;
+  void *p;
+};
+
 int task1_main(int argc, char *argv[])
 {
   int i;
-  struct msgbuf msg;
-  struct memory_message {
-    struct msgbuf msg;
-    int id;
-    void *p;
-  } msg;
+  char *area;
+  struct memory_message mem_msg;
 
   for (i = 0; i < 20; i++) {
     fprintf(stderr, "task 1 %s %p\n", argv[0], current);
     sleep(1);
-    if (i == 10) {
-      fprintf(stderr, "message send %p\n", &msg);
-      syscall_send(MSGBOX_ID_SAMPLE, &msg);
-    }
+    // if (i == 10) {
+    //   fprintf(stderr, "message send %p\n", &mem_msg);
+    //   syscall_send(MSGBOX_ID_SAMPLE, &mem_msg);
+    // }
 
-    msg->id = MSGBOX_ID_RETURNMEMORY;
-    syscall_send(MSGBOX_ID_GETMEMORY, &msg);
-    mp = syscall_recv(MSGBOX_ID_RETURNMEMORY);
-    area = mp->p;
+    fprintf(stderr, "[+] allocating request message send %p\n", &mem_msg);
+    mem_msg.id = MSGBOX_ID_RETURNMEMORY;
+    syscall_send(MSGBOX_ID_GETMEMORY, &mem_msg);
+    syscall_recv(MSGBOX_ID_RETURNMEMORY);
+    area = mem_msg.p;
+    fprintf(stderr, "Memory allocated!! address : %p   byte : %lu\n", mem_msg.p, sizeof(mem_msg.p));
   }
 
   return 0;
@@ -190,13 +196,14 @@ int task3_main(int argc, char *argv[])
 
 int memory_main(int argc, char *argv[])
 {
-  struct memory_msgbuf *mp;
+  struct memory_message *mp;
   static char buffer[1024][64];
   int i = 0;
+  char *area;
 
   while (1) {
-    mp = syscall_recv(MSGBOX_ID_GETMEMORY);
-    area = buffer[i++]; /*メモリ獲得*/
+    mp = (struct memory_message *)syscall_recv(MSGBOX_ID_GETMEMORY);
+    area = buffer[i++]; /*����������*/
     mp->p = area;
     syscall_send(mp->id, (struct msgbuf *)mp);
   }
@@ -332,7 +339,7 @@ void start()
   signal(SIGINT, sigint_handler);
   signal(SIGALRM, sigalrm_handler);
   signal(SIGBUS, sigsegv_handler);
-  signal(SIGSEGV, sigsegv_handler);
+  //signal(SIGSEGV, sigsegv_handler);
   signal(SIGSYS, sigsys_handler);
 
   alarm(2);
